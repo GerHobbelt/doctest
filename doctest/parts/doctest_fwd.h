@@ -440,6 +440,7 @@ DOCTEST_GCC_SUPPRESS_WARNING_POP
 #endif // DOCTEST_CONFIG_INCLUDE_TYPE_TRAITS
 #include <cstddef>
 #include <ostream>
+#include <istream>
 #else // DOCTEST_CONFIG_USE_STD_HEADERS
 
 // Forward declaring 'X' in namespace std is not permitted by the C++ Standard.
@@ -454,17 +455,18 @@ struct char_traits<char>;
 template <class charT, class traits>
 class basic_ostream;
 typedef basic_ostream<char, char_traits<char>> ostream;
+template <class charT, class traits>
+class basic_istream;
+typedef basic_istream<char, char_traits<char>> istream;
 template <class... Types>
 class tuple;
 #if DOCTEST_MSVC >= DOCTEST_COMPILER(19, 20, 0)
-DOCTEST_CLANG_SUPPRESS_WARNING_WITH_PUSH("-Wreserved-identifier")
 // see this issue on why this is needed: https://github.com/doctest/doctest/issues/183
-template <class _Ty>
+template <class Ty>
 class allocator;
-template <class _Elem, class _Traits, class _Alloc>
+template <class Elem, class Traits, class Alloc>
 class basic_string;
 using string = basic_string<char, char_traits<char>, allocator<char>>;
-DOCTEST_CLANG_SUPPRESS_WARNING_POP
 #endif // VS 2019
 } // namespace std
 
@@ -518,6 +520,8 @@ class DOCTEST_INTERFACE String
         view data;
     };
 
+    char* allocate(unsigned sz);
+
     bool isOnStack() const { return (buf[last] & 128) == 0; }
     void setOnHeap();
     void setLast(unsigned in = last);
@@ -531,6 +535,8 @@ public:
     // cppcheck-suppress noExplicitConstructor
     String(const char* in);
     String(const char* in, unsigned in_size);
+
+    String(std::istream& in, unsigned in_size);
 
     String(const String& other);
     String& operator=(const String& other);
@@ -878,10 +884,8 @@ namespace detail {
     template<class T>
     using has_insertion_operator = has_insertion_operator_impl::check<const T>;
 
-    DOCTEST_INTERFACE void my_memcpy(void* dest, const void* src, unsigned num);
-
-    DOCTEST_INTERFACE std::ostream* getTlsOss(bool reset=true); // returns a thread-local ostringstream
-    DOCTEST_INTERFACE String getTlsOssResult();
+    DOCTEST_INTERFACE std::ostream* tlssPush();
+    DOCTEST_INTERFACE String tlssPop();
 
 
     template <bool C>
@@ -897,38 +901,40 @@ namespace detail {
     template<typename T>
     struct filldata
     {
-        static void fill(const  T &in) {
-          *getTlsOss() << in;
+        static void fill(std::ostream* stream, const T &in) {
+          *stream << in;
         }
     };
-
-    /* This method can be chained */
-    template<typename T,unsigned long N>
-    void fillstream(const T (&in)[N] ) {
-        for(unsigned long i = 0; i < N; i++) {
-            *getTlsOss(false) << in[i];
-        }
-    }
 
     template<typename T,unsigned long N>
     struct filldata<T[N]>
     {
-        static void fill(const T (&in)[N]) {
-            getTlsOss(); // called once here to clear the stringstream
-            fillstream(in);
+        static void fill(std::ostream* stream, const T (&in)[N]) {
+            for (unsigned long i = 0; i < N; i++) {
+                *stream << in[i];
+            }
+        }
+    };
+
+    // Specialized since we don't want the terminating null byte!
+    template<unsigned long N>
+    struct filldata<const char[N]>
+    {
+        static void fill(std::ostream* stream, const char(&in)[N]) {
+            *stream << in;
         }
     };
 
     template<typename T>
-    void filloss(const T& in){
-	filldata<T>::fill(in);
+    void filloss(std::ostream* stream, const T& in) {
+        filldata<T>::fill(stream, in);
     }
 
     template<typename T,unsigned long N>
-    void filloss(const T (&in)[N]) {
-	// T[N], T(&)[N], T(&&)[N] have same behaviour.
+    void filloss(std::ostream* stream, const T (&in)[N]) {
+        // T[N], T(&)[N], T(&&)[N] have same behaviour.
         // Hence remove reference.
-	filldata<typename remove_reference <decltype(in)>::type >::fill(in);
+        filldata<typename remove_reference<decltype(in)>::type>::fill(stream, in);
     }
 
     template <>
@@ -937,14 +943,15 @@ namespace detail {
         template <typename T>
         static String convert(const DOCTEST_REF_WRAP(T) in) {
             /* When parameter "in" is a null terminated const char* it works.
-	     * When parameter "in" is a T arr[N] without '\0' we can fill the
+             * When parameter "in" is a T arr[N] without '\0' we can fill the
              * stringstream with N objects (T=char).If in is char pointer *
              * without '\0' , it would cause segfault
-	     * stepping over unaccessible memory.
+             * stepping over unaccessible memory.
              */
 
-            filloss(in);
-            return getTlsOssResult();
+            std::ostream* stream = tlssPush();
+            filloss(stream, in);
+            return tlssPop();
         }
     };
 
@@ -1174,8 +1181,8 @@ DOCTEST_CLANG_SUPPRESS_WARNING_WITH_PUSH("-Wunused-comparison")
         if(!res || doctest::getContextOptions()->success)                                          \
             return Result(res, stringifyBinaryExpr(lhs, op_str, rhs));                             \
         return Result(res);                                                                        \
-    }												   \
-    template <typename R ,typename enable_if<  !doctest::detail::is_rvalue_reference<R>::value   , void >::type* = nullptr>                                         \
+    }                                                                                              \
+    template <typename R ,typename enable_if<!doctest::detail::is_rvalue_reference<R>::value, void >::type* = nullptr> \
     DOCTEST_NOINLINE SFINAE_OP(Result,op) operator op(const R& rhs) {                              \
     bool res = op_macro(doctest::detail::forward<const L>(lhs), rhs);                              \
         if(m_at & assertType::is_false)                                                            \
@@ -1324,9 +1331,8 @@ DOCTEST_MSVC_SUPPRESS_WARNING_POP
             return Result(res);
         }
 
-	/* This is required for user-defined conversions from Expression_lhs to L */
-	//operator L() const { return lhs; }
-	operator L() const { return lhs; }
+        /* This is required for user-defined conversions from Expression_lhs to L */
+        operator L() const { return lhs; }
 
         // clang-format off
         DOCTEST_DO_BINARY_EXPRESSION_COMPARISON(==, " == ", DOCTEST_CMP_EQ) //!OCLINT bitwise operator in conditional
@@ -1383,12 +1389,12 @@ DOCTEST_CLANG_SUPPRESS_WARNING_POP
         // https://github.com/catchorg/Catch2/issues/870
         // https://github.com/catchorg/Catch2/issues/565
         template <typename L>
-	Expression_lhs<const L> operator<<(const L &&operand) {
+        Expression_lhs<const L> operator<<(const L &&operand) {
             return Expression_lhs<const L>(doctest::detail::forward<const L>(operand), m_at);
         }
 
         template <typename L,typename enable_if<!doctest::detail::is_rvalue_reference<L>::value,void >::type* = nullptr>
-	Expression_lhs<const L&> operator<<(const L &operand) {
+        Expression_lhs<const L&> operator<<(const L &operand) {
             return Expression_lhs<const L&>(operand, m_at);
         }
     };
@@ -1704,6 +1710,7 @@ DOCTEST_CLANG_SUPPRESS_WARNING_POP
     struct DOCTEST_INTERFACE MessageBuilder : public MessageData
     {
         std::ostream* m_stream;
+        bool          logged = false;
 
         MessageBuilder(const char* file, int line, assertType::Enum severity);
         MessageBuilder() = delete;
