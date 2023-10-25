@@ -1076,7 +1076,7 @@ DOCTEST_CLANG_SUPPRESS_WARNING_WITH_PUSH("-Wunused-comparison")
 // If not it doesn't find the operator or if the operator at global scope is defined after
 // this template, the template won't be instantiated due to SFINAE. Once the template is not
 // instantiated it can look for global operator using normal conversions.
-#define SFINAE_OP(ret,op) decltype(doctest::detail::declval<L>() op doctest::detail::declval<R>(),ret{})
+#define SFINAE_OP(ret,op) decltype((void)(doctest::detail::declval<L>() op doctest::detail::declval<R>()),ret{})
 
 #define DOCTEST_DO_BINARY_EXPRESSION_COMPARISON(op, op_str, op_macro)                              \
     template <typename R>                                                                          \
@@ -1571,8 +1571,10 @@ DOCTEST_CLANG_SUPPRESS_WARNING_POP
     class DOCTEST_INTERFACE ContextScopeBase : public IContextScope {
     protected:
         ContextScopeBase();
+        ContextScopeBase(ContextScopeBase&& other);
 
         void destroy();
+        bool need_to_destroy{true};
     };
 
     template <typename L> class ContextScope : public ContextScopeBase
@@ -1582,11 +1584,15 @@ DOCTEST_CLANG_SUPPRESS_WARNING_POP
     public:
         explicit ContextScope(const L &lambda) : lambda_(lambda) {}
 
-        ContextScope(ContextScope &&other) : lambda_(other.lambda_) {}
+        ContextScope(ContextScope &&other) : ContextScopeBase(static_cast<ContextScopeBase&&>(other)), lambda_(other.lambda_) {}
 
         void stringify(std::ostream* s) const override { lambda_(s); }
 
-        ~ContextScope() override { destroy(); }
+        ~ContextScope() override {
+            if (need_to_destroy) {
+                destroy();
+            }
+        }
     };
 
     struct DOCTEST_INTERFACE MessageBuilder : public MessageData
