@@ -12,10 +12,6 @@ set(script)
 set(suite)
 set(tests)
 
-if(NOT DEFINED ${add_labels})
-    set(add_labels 0)
-endif()
-
 function(add_command NAME)
   set(_args "")
   foreach(_arg ${ARGN})
@@ -61,7 +57,7 @@ foreach(line ${output})
   endif()
   set(test ${line})
   set(labels "")
-  if(${add_labels} EQUAL 1)
+  if(${add_labels})
     # get test suite that test belongs to
     execute_process(
       COMMAND ${TEST_EXECUTOR} "${TEST_EXECUTABLE}" --test-case=${test} --list-test-suites
