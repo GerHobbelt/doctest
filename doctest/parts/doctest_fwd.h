@@ -520,7 +520,6 @@ public:
     String& operator=(const String& other);
 
     String& operator+=(const String& other);
-    String  operator+(const String& other) const;
 
     String(String&& other);
     String& operator=(String&& other);
@@ -542,6 +541,8 @@ public:
     int compare(const char* other, bool no_case = false) const;
     int compare(const String& other, bool no_case = false) const;
 };
+
+DOCTEST_INTERFACE String operator+(const String& lhs, const String& rhs);
 
 DOCTEST_INTERFACE bool operator==(const String& lhs, const String& rhs);
 DOCTEST_INTERFACE bool operator!=(const String& lhs, const String& rhs);
@@ -764,6 +765,7 @@ struct ContextOptions //!OCLINT too many fields
     bool no_throw;             // to skip exceptions-related assertion macros
     bool no_exitcode;          // if the framework should return 0 as the exitcode
     bool no_run;               // to not run the tests at all (can be done with an "*" exclude)
+    bool no_intro;             // to not print the intro of the framework
     bool no_version;           // to not print the version of the framework
     bool no_colors;            // if output to the console should be colorized
     bool force_colors;         // forces the use of colors even when a tty cannot be detected
@@ -1818,6 +1820,7 @@ struct DOCTEST_INTERFACE CurrentTestCaseStats
     int    numAssertsFailedCurrentTest;
     double seconds;
     int    failure_flags; // use TestCaseFailureReason::Enum
+    bool   testCaseSuccess;
 };
 
 struct DOCTEST_INTERFACE TestCaseException

@@ -523,7 +523,6 @@ public:
     String& operator=(const String& other);
 
     String& operator+=(const String& other);
-    String  operator+(const String& other) const;
 
     String(String&& other);
     String& operator=(String&& other);
@@ -545,6 +544,8 @@ public:
     int compare(const char* other, bool no_case = false) const;
     int compare(const String& other, bool no_case = false) const;
 };
+
+DOCTEST_INTERFACE String operator+(const String& lhs, const String& rhs);
 
 DOCTEST_INTERFACE bool operator==(const String& lhs, const String& rhs);
 DOCTEST_INTERFACE bool operator!=(const String& lhs, const String& rhs);
@@ -767,6 +768,7 @@ struct ContextOptions //!OCLINT too many fields
     bool no_throw;             // to skip exceptions-related assertion macros
     bool no_exitcode;          // if the framework should return 0 as the exitcode
     bool no_run;               // to not run the tests at all (can be done with an "*" exclude)
+    bool no_intro;             // to not print the intro of the framework
     bool no_version;           // to not print the version of the framework
     bool no_colors;            // if output to the console should be colorized
     bool force_colors;         // forces the use of colors even when a tty cannot be detected
@@ -1821,6 +1823,7 @@ struct DOCTEST_INTERFACE CurrentTestCaseStats
     int    numAssertsFailedCurrentTest;
     double seconds;
     int    failure_flags; // use TestCaseFailureReason::Enum
+    bool   testCaseSuccess;
 };
 
 struct DOCTEST_INTERFACE TestCaseException
@@ -3307,7 +3310,8 @@ typedef timer_large_integer::type ticks_t;
                               (TestCaseFailureReason::FailedExactlyNumTimes & failure_flags);
 
             // if any subcase has failed - the whole test case has failed
-            if(failure_flags && !ok_to_fail)
+            testCaseSuccess = !(failure_flags && !ok_to_fail);
+            if(!testCaseSuccess)
                 numTestCasesFailed++;
         }
     };
@@ -3432,9 +3436,6 @@ String& String::operator+=(const String& other) {
     return *this;
 }
 
-// NOLINTNEXTLINE(clang-analyzer-cplusplus.NewDeleteLeaks)
-String String::operator+(const String& other) const { return String(*this) += other; }
-
 String::String(String&& other) {
     using namespace std;
     memcpy(buf, other.buf, len);
@@ -3487,6 +3488,9 @@ int String::compare(const char* other, bool no_case) const {
 int String::compare(const String& other, bool no_case) const {
     return compare(other.c_str(), no_case);
 }
+
+// NOLINTNEXTLINE(clang-analyzer-cplusplus.NewDeleteLeaks)
+String operator+(const String& lhs, const String& rhs) { return  String(lhs) += rhs; }
 
 // clang-format off
 bool operator==(const String& lhs, const String& rhs) { return lhs.compare(rhs) == 0; }
@@ -3690,7 +3694,7 @@ bool operator>(const Approx& lhs, double rhs) { return lhs.m_value > rhs && lhs 
 
 String toString(const Approx& in) {
     // NOLINTNEXTLINE(clang-analyzer-cplusplus.NewDeleteLeaks)
-    return String("Approx( ") + doctest::toString(in.m_value) + " )";
+    return "Approx( " + doctest::toString(in.m_value) + " )";
 }
 const ContextOptions* getContextOptions() { return DOCTEST_BRANCH_ON_DISABLED(nullptr, g_cs); }
 
@@ -4608,7 +4612,7 @@ namespace detail {
         }
 
         if(m_exception.size())
-            m_exception = String("\"") + m_exception + "\"";
+            m_exception = "\"" + m_exception + "\"";
 
         if(is_running_in_test) {
             addAssert(m_at);
@@ -5235,7 +5239,8 @@ namespace {
             xml.startElement("OverallResultsAsserts")
                     .writeAttribute("successes",
                                     st.numAssertsCurrentTest - st.numAssertsFailedCurrentTest)
-                    .writeAttribute("failures", st.numAssertsFailedCurrentTest);
+                    .writeAttribute("failures", st.numAssertsFailedCurrentTest)
+                    .writeAttribute("test_case_success", st.testCaseSuccess);
             if(opt.duration)
                 xml.writeAttribute("duration", st.seconds);
             if(tc->m_expected_failures)
@@ -5714,9 +5719,11 @@ namespace {
         }
 
         void printIntro() {
-            printVersion();
-            s << Color::Cyan << "[doctest] " << Color::None
-              << "run with \"--" DOCTEST_OPTIONS_PREFIX_DISPLAY "help\" for options\n";
+            if(opt.no_intro == false) {
+                printVersion();
+                s << Color::Cyan << "[doctest] " << Color::None
+                  << "run with \"--" DOCTEST_OPTIONS_PREFIX_DISPLAY "help\" for options\n";
+            }
         }
 
         void printHelp() {
@@ -5801,12 +5808,18 @@ namespace {
               << Whitespace(sizePrefixDisplay*1) << "exits after the tests finish\n";
             s << " -" DOCTEST_OPTIONS_PREFIX_DISPLAY "d,   --" DOCTEST_OPTIONS_PREFIX_DISPLAY "duration=<bool>               "
               << Whitespace(sizePrefixDisplay*1) << "prints the time duration of each test\n";
+            s << " -" DOCTEST_OPTIONS_PREFIX_DISPLAY "m,   --" DOCTEST_OPTIONS_PREFIX_DISPLAY "minimal=<bool>                "
+              << Whitespace(sizePrefixDisplay*1) << "minimal console output (only failures)\n";
+            s << " -" DOCTEST_OPTIONS_PREFIX_DISPLAY "q,   --" DOCTEST_OPTIONS_PREFIX_DISPLAY "quiet=<bool>                  "
+              << Whitespace(sizePrefixDisplay*1) << "no console output\n";
             s << " -" DOCTEST_OPTIONS_PREFIX_DISPLAY "nt,  --" DOCTEST_OPTIONS_PREFIX_DISPLAY "no-throw=<bool>               "
               << Whitespace(sizePrefixDisplay*1) << "skips exceptions-related assert checks\n";
             s << " -" DOCTEST_OPTIONS_PREFIX_DISPLAY "ne,  --" DOCTEST_OPTIONS_PREFIX_DISPLAY "no-exitcode=<bool>            "
               << Whitespace(sizePrefixDisplay*1) << "returns (or exits) always with success\n";
             s << " -" DOCTEST_OPTIONS_PREFIX_DISPLAY "nr,  --" DOCTEST_OPTIONS_PREFIX_DISPLAY "no-run=<bool>                 "
               << Whitespace(sizePrefixDisplay*1) << "skips all runtime doctest operations\n";
+            s << " -" DOCTEST_OPTIONS_PREFIX_DISPLAY "ni,  --" DOCTEST_OPTIONS_PREFIX_DISPLAY "no-intro=<bool>               "
+              << Whitespace(sizePrefixDisplay*1) << "omit the framework intro in the output\n";
             s << " -" DOCTEST_OPTIONS_PREFIX_DISPLAY "nv,  --" DOCTEST_OPTIONS_PREFIX_DISPLAY "no-version=<bool>             "
               << Whitespace(sizePrefixDisplay*1) << "omit the framework version in the output\n";
             s << " -" DOCTEST_OPTIONS_PREFIX_DISPLAY "nc,  --" DOCTEST_OPTIONS_PREFIX_DISPLAY "no-colors=<bool>              "
@@ -6317,6 +6330,7 @@ void Context::parseArgs(int argc, const char* const* argv, bool withDefaults) {
     DOCTEST_PARSE_AS_BOOL_OR_FLAG("no-throw", "nt", no_throw, false);
     DOCTEST_PARSE_AS_BOOL_OR_FLAG("no-exitcode", "ne", no_exitcode, false);
     DOCTEST_PARSE_AS_BOOL_OR_FLAG("no-run", "nr", no_run, false);
+    DOCTEST_PARSE_AS_BOOL_OR_FLAG("no-intro", "ni", no_intro, false);
     DOCTEST_PARSE_AS_BOOL_OR_FLAG("no-version", "nv", no_version, false);
     DOCTEST_PARSE_AS_BOOL_OR_FLAG("no-colors", "nc", no_colors, false);
     DOCTEST_PARSE_AS_BOOL_OR_FLAG("force-colors", "fc", force_colors, false);
