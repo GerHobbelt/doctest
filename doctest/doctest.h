@@ -1220,7 +1220,7 @@ DOCTEST_CLANG_SUPPRESS_WARNING_WITH_PUSH("-Wunused-comparison")
                 , m_at(at) {}
 
         DOCTEST_NOINLINE operator Result() {
-// this is needed only foc MSVC 2015:
+// this is needed only for MSVC 2015:
 // https://ci.appveyor.com/project/onqtam/doctest/builds/38181202
 DOCTEST_MSVC_SUPPRESS_WARNING_WITH_PUSH(4800) // 'int': forcing value to bool
             bool res = static_cast<bool>(lhs);
@@ -2801,6 +2801,7 @@ DOCTEST_MSVC_SUPPRESS_WARNING(5027) // move assignment operator was implicitly d
 DOCTEST_MSVC_SUPPRESS_WARNING(5026) // move constructor was implicitly defined as deleted
 DOCTEST_MSVC_SUPPRESS_WARNING(4625) // copy constructor was implicitly defined as deleted
 DOCTEST_MSVC_SUPPRESS_WARNING(4800) // forcing value to bool 'true' or 'false' (performance warning)
+DOCTEST_MSVC_SUPPRESS_WARNING(5245) // unreferenced function with internal linkage has been removed
 // static analysis
 DOCTEST_MSVC_SUPPRESS_WARNING(26439) // This kind of function may not throw. Declare it 'noexcept'
 DOCTEST_MSVC_SUPPRESS_WARNING(26495) // Always initialize a member variable
@@ -3112,7 +3113,7 @@ typedef timer_large_integer::type ticks_t;
 
     private:
         // Each thread has a different atomic that it operates on. If more than NumLanes threads
-        // use this, some will use the same atomic. So performance will degrate a bit, but still
+        // use this, some will use the same atomic. So performance will degrade a bit, but still
         // everything will work.
         //
         // The logic here is a bit tricky. The call should be as fast as possible, so that there
@@ -3938,12 +3939,12 @@ namespace {
     HANDLE g_stdoutHandle;
     WORD   g_origFgAttrs;
     WORD   g_origBgAttrs;
-    bool   g_attrsInitted = false;
+    bool   g_attrsInited = false;
 
     int colors_init() {
-        if(!g_attrsInitted) {
+        if(!g_attrsInited) {
             g_stdoutHandle = GetStdHandle(STD_OUTPUT_HANDLE);
-            g_attrsInitted = true;
+            g_attrsInited = true;
             CONSOLE_SCREEN_BUFFER_INFO csbiInfo;
             GetConsoleScreenBufferInfo(g_stdoutHandle, &csbiInfo);
             g_origFgAttrs = csbiInfo.wAttributes & ~(BACKGROUND_GREEN | BACKGROUND_RED |
@@ -3954,7 +3955,7 @@ namespace {
         return 0;
     }
 
-    int dumy_init_console_colors = colors_init();
+    int dummy_init_console_colors = colors_init();
 #endif // DOCTEST_CONFIG_COLORS_WINDOWS
 
     DOCTEST_CLANG_SUPPRESS_WARNING_WITH_PUSH("-Wdeprecated-declarations")
