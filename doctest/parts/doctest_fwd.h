@@ -451,7 +451,9 @@ DOCTEST_GCC_SUPPRESS_WARNING_POP
 
 // this is kept here for backwards compatibility since the config option was changed
 #ifdef DOCTEST_CONFIG_USE_IOSFWD
+#ifndef DOCTEST_CONFIG_USE_STD_HEADERS
 #define DOCTEST_CONFIG_USE_STD_HEADERS
+#endif
 #endif // DOCTEST_CONFIG_USE_IOSFWD
 
 // for clang - always include ciso646 (which drags some std stuff) because
@@ -462,7 +464,9 @@ DOCTEST_GCC_SUPPRESS_WARNING_POP
 #if DOCTEST_CLANG
 #include <ciso646>
 #ifdef _LIBCPP_VERSION
+#ifndef DOCTEST_CONFIG_USE_STD_HEADERS
 #define DOCTEST_CONFIG_USE_STD_HEADERS
+#endif
 #endif // _LIBCPP_VERSION
 #endif // clang
 
@@ -470,9 +474,11 @@ DOCTEST_GCC_SUPPRESS_WARNING_POP
 #ifndef DOCTEST_CONFIG_INCLUDE_TYPE_TRAITS
 #define DOCTEST_CONFIG_INCLUDE_TYPE_TRAITS
 #endif // DOCTEST_CONFIG_INCLUDE_TYPE_TRAITS
+DOCTEST_MAKE_STD_HEADERS_CLEAN_FROM_WARNINGS_ON_WALL_BEGIN
 #include <cstddef>
 #include <ostream>
 #include <istream>
+DOCTEST_MAKE_STD_HEADERS_CLEAN_FROM_WARNINGS_ON_WALL_END
 #else // DOCTEST_CONFIG_USE_STD_HEADERS
 
 // Forward declaring 'X' in namespace std is not permitted by the C++ Standard.
@@ -1033,6 +1039,14 @@ struct StringMaker : public detail::StringMakerBase<
     detail::has_insertion_operator<T>::value || detail::types::is_pointer<T>::value || detail::types::is_array<T>::value>
 {};
 
+#ifndef DOCTEST_STRINGIFY
+#ifdef DOCTEST_CONFIG_DOUBLE_STRINGIFY
+#define DOCTEST_STRINGIFY(...) toString(toString(__VA_ARGS__))
+#else
+#define DOCTEST_STRINGIFY(...) toString(__VA_ARGS__)
+#endif
+#endif
+
 template <typename T>
 String toString() {
 #if DOCTEST_MSVC >= 0 && DOCTEST_CLANG == 0 && DOCTEST_GCC == 0
@@ -1060,6 +1074,8 @@ DOCTEST_INTERFACE String toString(const char* in);
 DOCTEST_INTERFACE String toString(const std::string& in);
 #endif // VS 2019
 
+DOCTEST_INTERFACE String toString(String in);
+
 DOCTEST_INTERFACE String toString(std::nullptr_t);
 
 DOCTEST_INTERFACE String toString(bool in);
@@ -1083,7 +1099,7 @@ DOCTEST_INTERFACE String toString(long long unsigned in);
 template <typename T, typename detail::types::enable_if<detail::types::is_enum<T>::value, bool>::type = true>
 String toString(const DOCTEST_REF_WRAP(T) value) {
     typedef typename detail::types::underlying_type<T>::type UT;
-    return toString(static_cast<UT>(value));
+    return (DOCTEST_STRINGIFY(static_cast<UT>(value)));
 }
 
 namespace detail {
@@ -1099,17 +1115,19 @@ namespace detail {
         }
     };
 
+DOCTEST_MSVC_SUPPRESS_WARNING_WITH_PUSH(4866)
     template <typename T, size_t N>
     struct filldata<T[N]> {
         static void fill(std::ostream* stream, const T(&in)[N]) {
             *stream << "[";
             for (size_t i = 0; i < N; i++) {
                 if (i != 0) { *stream << ", "; }
-                *stream << toString(in[i]);
+                *stream << (DOCTEST_STRINGIFY(in[i]));
             }
             *stream << "]";
         }
     };
+DOCTEST_MSVC_SUPPRESS_WARNING_POP
 
     // Specialized since we don't want the terminating null byte!
     template <size_t N>
@@ -1276,7 +1294,7 @@ namespace detail {
     String stringifyBinaryExpr(const DOCTEST_REF_WRAP(L) lhs, const char* op,
                                const DOCTEST_REF_WRAP(R) rhs) {
         // NOLINTNEXTLINE(clang-analyzer-cplusplus.NewDeleteLeaks)
-        return toString(lhs) + op + toString(rhs);
+        return (DOCTEST_STRINGIFY(lhs)) + op + (DOCTEST_STRINGIFY(rhs));
     }
 
 #if DOCTEST_CLANG && DOCTEST_CLANG < DOCTEST_COMPILER(3, 6, 0)
@@ -1443,7 +1461,7 @@ DOCTEST_MSVC_SUPPRESS_WARNING_POP
                 res = !res;
 
             if(!res || getContextOptions()->success)
-                return Result(res, toString(lhs));
+                return Result(res, (DOCTEST_STRINGIFY(lhs)));
             return Result(res);
         }
 
@@ -1627,7 +1645,7 @@ DOCTEST_CLANG_SUPPRESS_WARNING_POP
                 m_failed = !m_failed;
 
             if(m_failed || getContextOptions()->success)
-                m_decomp = toString(val);
+                m_decomp = (DOCTEST_STRINGIFY(val));
 
             return !m_failed;
         }
@@ -1706,8 +1724,8 @@ DOCTEST_CLANG_SUPPRESS_WARNING_POP
         // IF THE DEBUGGER BREAKS HERE - GO 1 LEVEL UP IN THE CALLSTACK FOR THE FAILING ASSERT
         // THIS IS THE EFFECT OF HAVING 'DOCTEST_CONFIG_SUPER_FAST_ASSERTS' DEFINED
         // ###################################################################################
-        DOCTEST_ASSERT_OUT_OF_TESTS(toString(val));
-        DOCTEST_ASSERT_IN_TESTS(toString(val));
+        DOCTEST_ASSERT_OUT_OF_TESTS((DOCTEST_STRINGIFY(val)));
+        DOCTEST_ASSERT_IN_TESTS((DOCTEST_STRINGIFY(val)));
         return !failed;
     }
 
@@ -1784,11 +1802,13 @@ DOCTEST_CLANG_SUPPRESS_WARNING_POP
         ~MessageBuilder();
 
         // the preferred way of chaining parameters for stringification
+DOCTEST_MSVC_SUPPRESS_WARNING_WITH_PUSH(4866)
         template <typename T>
         MessageBuilder& operator,(const T& in) {
-            *m_stream << toString(in);
+            *m_stream << (DOCTEST_STRINGIFY(in));
             return *this;
         }
+DOCTEST_MSVC_SUPPRESS_WARNING_POP
 
         // kept here just for backwards-compatibility - the comma operator should be preferred now
         template <typename T>
@@ -2290,6 +2310,24 @@ int registerReporter(const char* name, int priority, bool isReporter) {
         DOCTEST_ASSERT_IMPLEMENT_2(assert_type, __VA_ARGS__);                                      \
     } DOCTEST_FUNC_SCOPE_END
 
+#define DOCTEST_BINARY_ASSERT(assert_type, comp, ...)                                              \
+    DOCTEST_FUNC_SCOPE_BEGIN {                                                                     \
+        doctest::detail::ResultBuilder DOCTEST_RB(doctest::assertType::assert_type, __FILE__,      \
+                                                   __LINE__, #__VA_ARGS__);                        \
+        DOCTEST_WRAP_IN_TRY(                                                                       \
+                DOCTEST_RB.binary_assert<doctest::detail::binaryAssertComparison::comp>(           \
+                        __VA_ARGS__))                                                              \
+        DOCTEST_ASSERT_LOG_REACT_RETURN(DOCTEST_RB);                                               \
+    } DOCTEST_FUNC_SCOPE_END
+
+#define DOCTEST_UNARY_ASSERT(assert_type, ...)                                                     \
+    DOCTEST_FUNC_SCOPE_BEGIN {                                                                     \
+        doctest::detail::ResultBuilder DOCTEST_RB(doctest::assertType::assert_type, __FILE__,      \
+                                                   __LINE__, #__VA_ARGS__);                        \
+        DOCTEST_WRAP_IN_TRY(DOCTEST_RB.unary_assert(__VA_ARGS__))                                  \
+        DOCTEST_ASSERT_LOG_REACT_RETURN(DOCTEST_RB);                                               \
+    } DOCTEST_FUNC_SCOPE_END
+
 #else // DOCTEST_CONFIG_SUPER_FAST_ASSERTS
 
 // necessary for <ASSERT>_MESSAGE
@@ -2301,6 +2339,14 @@ int registerReporter(const char* name, int priority, bool isReporter) {
             doctest::assertType::assert_type, __FILE__, __LINE__, #__VA_ARGS__,                    \
             doctest::detail::ExpressionDecomposer(doctest::assertType::assert_type)                \
                     << __VA_ARGS__) DOCTEST_CLANG_SUPPRESS_WARNING_POP
+
+#define DOCTEST_BINARY_ASSERT(assert_type, comparison, ...)                                        \
+    doctest::detail::binary_assert<doctest::detail::binaryAssertComparison::comparison>(           \
+            doctest::assertType::assert_type, __FILE__, __LINE__, #__VA_ARGS__, __VA_ARGS__)
+
+#define DOCTEST_UNARY_ASSERT(assert_type, ...)                                                     \
+    doctest::detail::unary_assert(doctest::assertType::assert_type, __FILE__, __LINE__,            \
+                                  #__VA_ARGS__, __VA_ARGS__)
 
 #endif // DOCTEST_CONFIG_SUPER_FAST_ASSERTS
 
@@ -2319,6 +2365,34 @@ int registerReporter(const char* name, int priority, bool isReporter) {
 #define DOCTEST_CHECK_FALSE_MESSAGE(cond, ...) DOCTEST_FUNC_SCOPE_BEGIN { DOCTEST_INFO(__VA_ARGS__); DOCTEST_ASSERT_IMPLEMENT_2(DT_CHECK_FALSE, cond); } DOCTEST_FUNC_SCOPE_END
 #define DOCTEST_REQUIRE_FALSE_MESSAGE(cond, ...) DOCTEST_FUNC_SCOPE_BEGIN { DOCTEST_INFO(__VA_ARGS__); DOCTEST_ASSERT_IMPLEMENT_2(DT_REQUIRE_FALSE, cond); } DOCTEST_FUNC_SCOPE_END
 // clang-format on
+
+#define DOCTEST_WARN_EQ(...) DOCTEST_BINARY_ASSERT(DT_WARN_EQ, eq, __VA_ARGS__)
+#define DOCTEST_CHECK_EQ(...) DOCTEST_BINARY_ASSERT(DT_CHECK_EQ, eq, __VA_ARGS__)
+#define DOCTEST_REQUIRE_EQ(...) DOCTEST_BINARY_ASSERT(DT_REQUIRE_EQ, eq, __VA_ARGS__)
+#define DOCTEST_WARN_NE(...) DOCTEST_BINARY_ASSERT(DT_WARN_NE, ne, __VA_ARGS__)
+#define DOCTEST_CHECK_NE(...) DOCTEST_BINARY_ASSERT(DT_CHECK_NE, ne, __VA_ARGS__)
+#define DOCTEST_REQUIRE_NE(...) DOCTEST_BINARY_ASSERT(DT_REQUIRE_NE, ne, __VA_ARGS__)
+#define DOCTEST_WARN_GT(...) DOCTEST_BINARY_ASSERT(DT_WARN_GT, gt, __VA_ARGS__)
+#define DOCTEST_CHECK_GT(...) DOCTEST_BINARY_ASSERT(DT_CHECK_GT, gt, __VA_ARGS__)
+#define DOCTEST_REQUIRE_GT(...) DOCTEST_BINARY_ASSERT(DT_REQUIRE_GT, gt, __VA_ARGS__)
+#define DOCTEST_WARN_LT(...) DOCTEST_BINARY_ASSERT(DT_WARN_LT, lt, __VA_ARGS__)
+#define DOCTEST_CHECK_LT(...) DOCTEST_BINARY_ASSERT(DT_CHECK_LT, lt, __VA_ARGS__)
+#define DOCTEST_REQUIRE_LT(...) DOCTEST_BINARY_ASSERT(DT_REQUIRE_LT, lt, __VA_ARGS__)
+#define DOCTEST_WARN_GE(...) DOCTEST_BINARY_ASSERT(DT_WARN_GE, ge, __VA_ARGS__)
+#define DOCTEST_CHECK_GE(...) DOCTEST_BINARY_ASSERT(DT_CHECK_GE, ge, __VA_ARGS__)
+#define DOCTEST_REQUIRE_GE(...) DOCTEST_BINARY_ASSERT(DT_REQUIRE_GE, ge, __VA_ARGS__)
+#define DOCTEST_WARN_LE(...) DOCTEST_BINARY_ASSERT(DT_WARN_LE, le, __VA_ARGS__)
+#define DOCTEST_CHECK_LE(...) DOCTEST_BINARY_ASSERT(DT_CHECK_LE, le, __VA_ARGS__)
+#define DOCTEST_REQUIRE_LE(...) DOCTEST_BINARY_ASSERT(DT_REQUIRE_LE, le, __VA_ARGS__)
+
+#define DOCTEST_WARN_UNARY(...) DOCTEST_UNARY_ASSERT(DT_WARN_UNARY, __VA_ARGS__)
+#define DOCTEST_CHECK_UNARY(...) DOCTEST_UNARY_ASSERT(DT_CHECK_UNARY, __VA_ARGS__)
+#define DOCTEST_REQUIRE_UNARY(...) DOCTEST_UNARY_ASSERT(DT_REQUIRE_UNARY, __VA_ARGS__)
+#define DOCTEST_WARN_UNARY_FALSE(...) DOCTEST_UNARY_ASSERT(DT_WARN_UNARY_FALSE, __VA_ARGS__)
+#define DOCTEST_CHECK_UNARY_FALSE(...) DOCTEST_UNARY_ASSERT(DT_CHECK_UNARY_FALSE, __VA_ARGS__)
+#define DOCTEST_REQUIRE_UNARY_FALSE(...) DOCTEST_UNARY_ASSERT(DT_REQUIRE_UNARY_FALSE, __VA_ARGS__)
+
+#ifndef DOCTEST_CONFIG_NO_EXCEPTIONS
 
 #define DOCTEST_ASSERT_THROWS_AS(expr, assert_type, message, ...)                                  \
     DOCTEST_FUNC_SCOPE_BEGIN {                                                                     \
@@ -2399,149 +2473,6 @@ int registerReporter(const char* name, int priority, bool isReporter) {
 #define DOCTEST_CHECK_NOTHROW_MESSAGE(expr, ...) DOCTEST_FUNC_SCOPE_BEGIN { DOCTEST_INFO(__VA_ARGS__); DOCTEST_CHECK_NOTHROW(expr); } DOCTEST_FUNC_SCOPE_END
 #define DOCTEST_REQUIRE_NOTHROW_MESSAGE(expr, ...) DOCTEST_FUNC_SCOPE_BEGIN { DOCTEST_INFO(__VA_ARGS__); DOCTEST_REQUIRE_NOTHROW(expr); } DOCTEST_FUNC_SCOPE_END
 // clang-format on
-
-#ifndef DOCTEST_CONFIG_SUPER_FAST_ASSERTS
-
-#define DOCTEST_BINARY_ASSERT(assert_type, comp, ...)                                              \
-    DOCTEST_FUNC_SCOPE_BEGIN {                                                                     \
-        doctest::detail::ResultBuilder DOCTEST_RB(doctest::assertType::assert_type, __FILE__,      \
-                                                   __LINE__, #__VA_ARGS__);                        \
-        DOCTEST_WRAP_IN_TRY(                                                                       \
-                DOCTEST_RB.binary_assert<doctest::detail::binaryAssertComparison::comp>(           \
-                        __VA_ARGS__))                                                              \
-        DOCTEST_ASSERT_LOG_REACT_RETURN(DOCTEST_RB);                                               \
-    } DOCTEST_FUNC_SCOPE_END
-
-#define DOCTEST_UNARY_ASSERT(assert_type, ...)                                                     \
-    DOCTEST_FUNC_SCOPE_BEGIN {                                                                     \
-        doctest::detail::ResultBuilder DOCTEST_RB(doctest::assertType::assert_type, __FILE__,      \
-                                                   __LINE__, #__VA_ARGS__);                        \
-        DOCTEST_WRAP_IN_TRY(DOCTEST_RB.unary_assert(__VA_ARGS__))                                  \
-        DOCTEST_ASSERT_LOG_REACT_RETURN(DOCTEST_RB);                                               \
-    } DOCTEST_FUNC_SCOPE_END
-
-#else // DOCTEST_CONFIG_SUPER_FAST_ASSERTS
-
-#define DOCTEST_BINARY_ASSERT(assert_type, comparison, ...)                                        \
-    doctest::detail::binary_assert<doctest::detail::binaryAssertComparison::comparison>(           \
-            doctest::assertType::assert_type, __FILE__, __LINE__, #__VA_ARGS__, __VA_ARGS__)
-
-#define DOCTEST_UNARY_ASSERT(assert_type, ...)                                                     \
-    doctest::detail::unary_assert(doctest::assertType::assert_type, __FILE__, __LINE__,            \
-                                  #__VA_ARGS__, __VA_ARGS__)
-
-#endif // DOCTEST_CONFIG_SUPER_FAST_ASSERTS
-
-#define DOCTEST_WARN_EQ(...) DOCTEST_BINARY_ASSERT(DT_WARN_EQ, eq, __VA_ARGS__)
-#define DOCTEST_CHECK_EQ(...) DOCTEST_BINARY_ASSERT(DT_CHECK_EQ, eq, __VA_ARGS__)
-#define DOCTEST_REQUIRE_EQ(...) DOCTEST_BINARY_ASSERT(DT_REQUIRE_EQ, eq, __VA_ARGS__)
-#define DOCTEST_WARN_NE(...) DOCTEST_BINARY_ASSERT(DT_WARN_NE, ne, __VA_ARGS__)
-#define DOCTEST_CHECK_NE(...) DOCTEST_BINARY_ASSERT(DT_CHECK_NE, ne, __VA_ARGS__)
-#define DOCTEST_REQUIRE_NE(...) DOCTEST_BINARY_ASSERT(DT_REQUIRE_NE, ne, __VA_ARGS__)
-#define DOCTEST_WARN_GT(...) DOCTEST_BINARY_ASSERT(DT_WARN_GT, gt, __VA_ARGS__)
-#define DOCTEST_CHECK_GT(...) DOCTEST_BINARY_ASSERT(DT_CHECK_GT, gt, __VA_ARGS__)
-#define DOCTEST_REQUIRE_GT(...) DOCTEST_BINARY_ASSERT(DT_REQUIRE_GT, gt, __VA_ARGS__)
-#define DOCTEST_WARN_LT(...) DOCTEST_BINARY_ASSERT(DT_WARN_LT, lt, __VA_ARGS__)
-#define DOCTEST_CHECK_LT(...) DOCTEST_BINARY_ASSERT(DT_CHECK_LT, lt, __VA_ARGS__)
-#define DOCTEST_REQUIRE_LT(...) DOCTEST_BINARY_ASSERT(DT_REQUIRE_LT, lt, __VA_ARGS__)
-#define DOCTEST_WARN_GE(...) DOCTEST_BINARY_ASSERT(DT_WARN_GE, ge, __VA_ARGS__)
-#define DOCTEST_CHECK_GE(...) DOCTEST_BINARY_ASSERT(DT_CHECK_GE, ge, __VA_ARGS__)
-#define DOCTEST_REQUIRE_GE(...) DOCTEST_BINARY_ASSERT(DT_REQUIRE_GE, ge, __VA_ARGS__)
-#define DOCTEST_WARN_LE(...) DOCTEST_BINARY_ASSERT(DT_WARN_LE, le, __VA_ARGS__)
-#define DOCTEST_CHECK_LE(...) DOCTEST_BINARY_ASSERT(DT_CHECK_LE, le, __VA_ARGS__)
-#define DOCTEST_REQUIRE_LE(...) DOCTEST_BINARY_ASSERT(DT_REQUIRE_LE, le, __VA_ARGS__)
-
-#define DOCTEST_WARN_UNARY(...) DOCTEST_UNARY_ASSERT(DT_WARN_UNARY, __VA_ARGS__)
-#define DOCTEST_CHECK_UNARY(...) DOCTEST_UNARY_ASSERT(DT_CHECK_UNARY, __VA_ARGS__)
-#define DOCTEST_REQUIRE_UNARY(...) DOCTEST_UNARY_ASSERT(DT_REQUIRE_UNARY, __VA_ARGS__)
-#define DOCTEST_WARN_UNARY_FALSE(...) DOCTEST_UNARY_ASSERT(DT_WARN_UNARY_FALSE, __VA_ARGS__)
-#define DOCTEST_CHECK_UNARY_FALSE(...) DOCTEST_UNARY_ASSERT(DT_CHECK_UNARY_FALSE, __VA_ARGS__)
-#define DOCTEST_REQUIRE_UNARY_FALSE(...) DOCTEST_UNARY_ASSERT(DT_REQUIRE_UNARY_FALSE, __VA_ARGS__)
-
-#ifdef DOCTEST_CONFIG_NO_EXCEPTIONS
-
-#undef DOCTEST_WARN_THROWS
-#undef DOCTEST_CHECK_THROWS
-#undef DOCTEST_REQUIRE_THROWS
-#undef DOCTEST_WARN_THROWS_AS
-#undef DOCTEST_CHECK_THROWS_AS
-#undef DOCTEST_REQUIRE_THROWS_AS
-#undef DOCTEST_WARN_THROWS_WITH
-#undef DOCTEST_CHECK_THROWS_WITH
-#undef DOCTEST_REQUIRE_THROWS_WITH
-#undef DOCTEST_WARN_THROWS_WITH_AS
-#undef DOCTEST_CHECK_THROWS_WITH_AS
-#undef DOCTEST_REQUIRE_THROWS_WITH_AS
-#undef DOCTEST_WARN_NOTHROW
-#undef DOCTEST_CHECK_NOTHROW
-#undef DOCTEST_REQUIRE_NOTHROW
-
-#undef DOCTEST_WARN_THROWS_MESSAGE
-#undef DOCTEST_CHECK_THROWS_MESSAGE
-#undef DOCTEST_REQUIRE_THROWS_MESSAGE
-#undef DOCTEST_WARN_THROWS_AS_MESSAGE
-#undef DOCTEST_CHECK_THROWS_AS_MESSAGE
-#undef DOCTEST_REQUIRE_THROWS_AS_MESSAGE
-#undef DOCTEST_WARN_THROWS_WITH_MESSAGE
-#undef DOCTEST_CHECK_THROWS_WITH_MESSAGE
-#undef DOCTEST_REQUIRE_THROWS_WITH_MESSAGE
-#undef DOCTEST_WARN_THROWS_WITH_AS_MESSAGE
-#undef DOCTEST_CHECK_THROWS_WITH_AS_MESSAGE
-#undef DOCTEST_REQUIRE_THROWS_WITH_AS_MESSAGE
-#undef DOCTEST_WARN_NOTHROW_MESSAGE
-#undef DOCTEST_CHECK_NOTHROW_MESSAGE
-#undef DOCTEST_REQUIRE_NOTHROW_MESSAGE
-
-#ifdef DOCTEST_CONFIG_NO_EXCEPTIONS_BUT_WITH_ALL_ASSERTS
-
-#define DOCTEST_WARN_THROWS(...) DOCTEST_FUNC_EMPTY
-#define DOCTEST_CHECK_THROWS(...) DOCTEST_FUNC_EMPTY
-#define DOCTEST_REQUIRE_THROWS(...) DOCTEST_FUNC_EMPTY
-#define DOCTEST_WARN_THROWS_AS(expr, ...) DOCTEST_FUNC_EMPTY
-#define DOCTEST_CHECK_THROWS_AS(expr, ...) DOCTEST_FUNC_EMPTY
-#define DOCTEST_REQUIRE_THROWS_AS(expr, ...) DOCTEST_FUNC_EMPTY
-#define DOCTEST_WARN_THROWS_WITH(expr, ...) DOCTEST_FUNC_EMPTY
-#define DOCTEST_CHECK_THROWS_WITH(expr, ...) DOCTEST_FUNC_EMPTY
-#define DOCTEST_REQUIRE_THROWS_WITH(expr, ...) DOCTEST_FUNC_EMPTY
-#define DOCTEST_WARN_THROWS_WITH_AS(expr, with, ...) DOCTEST_FUNC_EMPTY
-#define DOCTEST_CHECK_THROWS_WITH_AS(expr, with, ...) DOCTEST_FUNC_EMPTY
-#define DOCTEST_REQUIRE_THROWS_WITH_AS(expr, with, ...) DOCTEST_FUNC_EMPTY
-#define DOCTEST_WARN_NOTHROW(...) DOCTEST_FUNC_EMPTY
-#define DOCTEST_CHECK_NOTHROW(...) DOCTEST_FUNC_EMPTY
-#define DOCTEST_REQUIRE_NOTHROW(...) DOCTEST_FUNC_EMPTY
-
-#define DOCTEST_WARN_THROWS_MESSAGE(expr, ...) DOCTEST_FUNC_EMPTY
-#define DOCTEST_CHECK_THROWS_MESSAGE(expr, ...) DOCTEST_FUNC_EMPTY
-#define DOCTEST_REQUIRE_THROWS_MESSAGE(expr, ...) DOCTEST_FUNC_EMPTY
-#define DOCTEST_WARN_THROWS_AS_MESSAGE(expr, ex, ...) DOCTEST_FUNC_EMPTY
-#define DOCTEST_CHECK_THROWS_AS_MESSAGE(expr, ex, ...) DOCTEST_FUNC_EMPTY
-#define DOCTEST_REQUIRE_THROWS_AS_MESSAGE(expr, ex, ...) DOCTEST_FUNC_EMPTY
-#define DOCTEST_WARN_THROWS_WITH_MESSAGE(expr, with, ...) DOCTEST_FUNC_EMPTY
-#define DOCTEST_CHECK_THROWS_WITH_MESSAGE(expr, with, ...) DOCTEST_FUNC_EMPTY
-#define DOCTEST_REQUIRE_THROWS_WITH_MESSAGE(expr, with, ...) DOCTEST_FUNC_EMPTY
-#define DOCTEST_WARN_THROWS_WITH_AS_MESSAGE(expr, with, ex, ...) DOCTEST_FUNC_EMPTY
-#define DOCTEST_CHECK_THROWS_WITH_AS_MESSAGE(expr, with, ex, ...) DOCTEST_FUNC_EMPTY
-#define DOCTEST_REQUIRE_THROWS_WITH_AS_MESSAGE(expr, with, ex, ...) DOCTEST_FUNC_EMPTY
-#define DOCTEST_WARN_NOTHROW_MESSAGE(expr, ...) DOCTEST_FUNC_EMPTY
-#define DOCTEST_CHECK_NOTHROW_MESSAGE(expr, ...) DOCTEST_FUNC_EMPTY
-#define DOCTEST_REQUIRE_NOTHROW_MESSAGE(expr, ...) DOCTEST_FUNC_EMPTY
-
-#else // DOCTEST_CONFIG_NO_EXCEPTIONS_BUT_WITH_ALL_ASSERTS
-
-#undef DOCTEST_REQUIRE
-#undef DOCTEST_REQUIRE_FALSE
-#undef DOCTEST_REQUIRE_MESSAGE
-#undef DOCTEST_REQUIRE_FALSE_MESSAGE
-#undef DOCTEST_REQUIRE_EQ
-#undef DOCTEST_REQUIRE_NE
-#undef DOCTEST_REQUIRE_GT
-#undef DOCTEST_REQUIRE_LT
-#undef DOCTEST_REQUIRE_GE
-#undef DOCTEST_REQUIRE_LE
-#undef DOCTEST_REQUIRE_UNARY
-#undef DOCTEST_REQUIRE_UNARY_FALSE
-
-#endif // DOCTEST_CONFIG_NO_EXCEPTIONS_BUT_WITH_ALL_ASSERTS
 
 #endif // DOCTEST_CONFIG_NO_EXCEPTIONS
 
@@ -2678,6 +2609,22 @@ namespace detail {
 #define DOCTEST_CHECK_UNARY_FALSE(...) [&] { return !(__VA_ARGS__); }()
 #define DOCTEST_REQUIRE_UNARY_FALSE(...) [&] { return !(__VA_ARGS__); }()
 
+#ifndef DOCTEST_CONFIG_NO_EXCEPTIONS
+
+#define DOCTEST_WARN_THROWS_WITH(expr, with, ...) [] { static_assert(false, "Exception translation is not available when doctest is disabled."); return false; }()
+#define DOCTEST_CHECK_THROWS_WITH(expr, with, ...) DOCTEST_WARN_THROWS_WITH(,,)
+#define DOCTEST_REQUIRE_THROWS_WITH(expr, with, ...) DOCTEST_WARN_THROWS_WITH(,,)
+#define DOCTEST_WARN_THROWS_WITH_AS(expr, with, ex, ...) DOCTEST_WARN_THROWS_WITH(,,)
+#define DOCTEST_CHECK_THROWS_WITH_AS(expr, with, ex, ...) DOCTEST_WARN_THROWS_WITH(,,)
+#define DOCTEST_REQUIRE_THROWS_WITH_AS(expr, with, ex, ...) DOCTEST_WARN_THROWS_WITH(,,)
+
+#define DOCTEST_WARN_THROWS_WITH_MESSAGE(expr, with, ...) DOCTEST_WARN_THROWS_WITH(,,)
+#define DOCTEST_CHECK_THROWS_WITH_MESSAGE(expr, with, ...) DOCTEST_WARN_THROWS_WITH(,,)
+#define DOCTEST_REQUIRE_THROWS_WITH_MESSAGE(expr, with, ...) DOCTEST_WARN_THROWS_WITH(,,)
+#define DOCTEST_WARN_THROWS_WITH_AS_MESSAGE(expr, with, ex, ...) DOCTEST_WARN_THROWS_WITH(,,)
+#define DOCTEST_CHECK_THROWS_WITH_AS_MESSAGE(expr, with, ex, ...) DOCTEST_WARN_THROWS_WITH(,,)
+#define DOCTEST_REQUIRE_THROWS_WITH_AS_MESSAGE(expr, with, ex, ...) DOCTEST_WARN_THROWS_WITH(,,)
+
 #define DOCTEST_WARN_THROWS(...) [&] { try { __VA_ARGS__; return false; } catch (...) { return true; } }()
 #define DOCTEST_CHECK_THROWS(...) [&] { try { __VA_ARGS__; return false; } catch (...) { return true; } }()
 #define DOCTEST_REQUIRE_THROWS(...) [&] { try { __VA_ARGS__; return false; } catch (...) { return true; } }()
@@ -2697,6 +2644,8 @@ namespace detail {
 #define DOCTEST_WARN_NOTHROW_MESSAGE(expr, ...) [&] { try { __VA_ARGS__; return true; } catch (...) { return false; } }()
 #define DOCTEST_CHECK_NOTHROW_MESSAGE(expr, ...) [&] { try { __VA_ARGS__; return true; } catch (...) { return false; } }()
 #define DOCTEST_REQUIRE_NOTHROW_MESSAGE(expr, ...) [&] { try { __VA_ARGS__; return true; } catch (...) { return false; } }()
+
+#endif // DOCTEST_CONFIG_NO_EXCEPTIONS
 
 #else // DOCTEST_CONFIG_EVALUATE_ASSERTS_EVEN_WHEN_DISABLED
 
@@ -2740,12 +2689,20 @@ namespace detail {
 #define DOCTEST_CHECK_UNARY_FALSE(...) DOCTEST_FUNC_EMPTY
 #define DOCTEST_REQUIRE_UNARY_FALSE(...) DOCTEST_FUNC_EMPTY
 
+#ifndef DOCTEST_CONFIG_NO_EXCEPTIONS
+
 #define DOCTEST_WARN_THROWS(...) DOCTEST_FUNC_EMPTY
 #define DOCTEST_CHECK_THROWS(...) DOCTEST_FUNC_EMPTY
 #define DOCTEST_REQUIRE_THROWS(...) DOCTEST_FUNC_EMPTY
 #define DOCTEST_WARN_THROWS_AS(expr, ...) DOCTEST_FUNC_EMPTY
 #define DOCTEST_CHECK_THROWS_AS(expr, ...) DOCTEST_FUNC_EMPTY
 #define DOCTEST_REQUIRE_THROWS_AS(expr, ...) DOCTEST_FUNC_EMPTY
+#define DOCTEST_WARN_THROWS_WITH(expr, ...) DOCTEST_FUNC_EMPTY
+#define DOCTEST_CHECK_THROWS_WITH(expr, ...) DOCTEST_FUNC_EMPTY
+#define DOCTEST_REQUIRE_THROWS_WITH(expr, ...) DOCTEST_FUNC_EMPTY
+#define DOCTEST_WARN_THROWS_WITH_AS(expr, with, ...) DOCTEST_FUNC_EMPTY
+#define DOCTEST_CHECK_THROWS_WITH_AS(expr, with, ...) DOCTEST_FUNC_EMPTY
+#define DOCTEST_REQUIRE_THROWS_WITH_AS(expr, with, ...) DOCTEST_FUNC_EMPTY
 #define DOCTEST_WARN_NOTHROW(...) DOCTEST_FUNC_EMPTY
 #define DOCTEST_CHECK_NOTHROW(...) DOCTEST_FUNC_EMPTY
 #define DOCTEST_REQUIRE_NOTHROW(...) DOCTEST_FUNC_EMPTY
@@ -2756,27 +2713,91 @@ namespace detail {
 #define DOCTEST_WARN_THROWS_AS_MESSAGE(expr, ex, ...) DOCTEST_FUNC_EMPTY
 #define DOCTEST_CHECK_THROWS_AS_MESSAGE(expr, ex, ...) DOCTEST_FUNC_EMPTY
 #define DOCTEST_REQUIRE_THROWS_AS_MESSAGE(expr, ex, ...) DOCTEST_FUNC_EMPTY
-#define DOCTEST_WARN_NOTHROW_MESSAGE(expr, ...) DOCTEST_FUNC_EMPTY
-#define DOCTEST_CHECK_NOTHROW_MESSAGE(expr, ...) DOCTEST_FUNC_EMPTY
-#define DOCTEST_REQUIRE_NOTHROW_MESSAGE(expr, ...) DOCTEST_FUNC_EMPTY
-
-#endif // DOCTEST_CONFIG_EVALUATE_ASSERTS_EVEN_WHEN_DISABLED
-
-#define DOCTEST_WARN_THROWS_WITH(expr, ...) DOCTEST_FUNC_EMPTY
-#define DOCTEST_CHECK_THROWS_WITH(expr, ...) DOCTEST_FUNC_EMPTY
-#define DOCTEST_REQUIRE_THROWS_WITH(expr, ...) DOCTEST_FUNC_EMPTY
-#define DOCTEST_WARN_THROWS_WITH_AS(expr, with, ...) DOCTEST_FUNC_EMPTY
-#define DOCTEST_CHECK_THROWS_WITH_AS(expr, with, ...) DOCTEST_FUNC_EMPTY
-#define DOCTEST_REQUIRE_THROWS_WITH_AS(expr, with, ...) DOCTEST_FUNC_EMPTY
-
 #define DOCTEST_WARN_THROWS_WITH_MESSAGE(expr, with, ...) DOCTEST_FUNC_EMPTY
 #define DOCTEST_CHECK_THROWS_WITH_MESSAGE(expr, with, ...) DOCTEST_FUNC_EMPTY
 #define DOCTEST_REQUIRE_THROWS_WITH_MESSAGE(expr, with, ...) DOCTEST_FUNC_EMPTY
 #define DOCTEST_WARN_THROWS_WITH_AS_MESSAGE(expr, with, ex, ...) DOCTEST_FUNC_EMPTY
 #define DOCTEST_CHECK_THROWS_WITH_AS_MESSAGE(expr, with, ex, ...) DOCTEST_FUNC_EMPTY
 #define DOCTEST_REQUIRE_THROWS_WITH_AS_MESSAGE(expr, with, ex, ...) DOCTEST_FUNC_EMPTY
+#define DOCTEST_WARN_NOTHROW_MESSAGE(expr, ...) DOCTEST_FUNC_EMPTY
+#define DOCTEST_CHECK_NOTHROW_MESSAGE(expr, ...) DOCTEST_FUNC_EMPTY
+#define DOCTEST_REQUIRE_NOTHROW_MESSAGE(expr, ...) DOCTEST_FUNC_EMPTY
+
+#endif // DOCTEST_CONFIG_NO_EXCEPTIONS
+
+#endif // DOCTEST_CONFIG_EVALUATE_ASSERTS_EVEN_WHEN_DISABLED
 
 #endif // DOCTEST_CONFIG_DISABLE
+
+#ifdef DOCTEST_CONFIG_NO_EXCEPTIONS
+
+#ifdef DOCTEST_CONFIG_NO_EXCEPTIONS_BUT_WITH_ALL_ASSERTS
+#define DOCTEST_EXCEPTION_EMPTY_FUNC DOCTEST_FUNC_EMPTY
+#else // DOCTEST_CONFIG_NO_EXCEPTIONS_BUT_WITH_ALL_ASSERTS
+#define DOCTEST_EXCEPTION_EMPTY_FUNC [] { static_assert(false, "Exceptions are disabled! "
+    "Use DOCTEST_CONFIG_NO_EXCEPTIONS_BUT_WITH_ALL_ASSERTS if you want to compile with exceptions disabled."); return false; }()
+
+#undef DOCTEST_REQUIRE
+#undef DOCTEST_REQUIRE_FALSE
+#undef DOCTEST_REQUIRE_MESSAGE
+#undef DOCTEST_REQUIRE_FALSE_MESSAGE
+#undef DOCTEST_REQUIRE_EQ
+#undef DOCTEST_REQUIRE_NE
+#undef DOCTEST_REQUIRE_GT
+#undef DOCTEST_REQUIRE_LT
+#undef DOCTEST_REQUIRE_GE
+#undef DOCTEST_REQUIRE_LE
+#undef DOCTEST_REQUIRE_UNARY
+#undef DOCTEST_REQUIRE_UNARY_FALSE
+
+#define DOCTEST_REQUIRE DOCTEST_EXCEPTION_EMPTY_FUNC
+#define DOCTEST_REQUIRE_FALSE DOCTEST_EXCEPTION_EMPTY_FUNC
+#define DOCTEST_REQUIRE_MESSAGE DOCTEST_EXCEPTION_EMPTY_FUNC
+#define DOCTEST_REQUIRE_FALSE_MESSAGE DOCTEST_EXCEPTION_EMPTY_FUNC
+#define DOCTEST_REQUIRE_EQ DOCTEST_EXCEPTION_EMPTY_FUNC
+#define DOCTEST_REQUIRE_NE DOCTEST_EXCEPTION_EMPTY_FUNC
+#define DOCTEST_REQUIRE_GT DOCTEST_EXCEPTION_EMPTY_FUNC
+#define DOCTEST_REQUIRE_LT DOCTEST_EXCEPTION_EMPTY_FUNC
+#define DOCTEST_REQUIRE_GE DOCTEST_EXCEPTION_EMPTY_FUNC
+#define DOCTEST_REQUIRE_LE DOCTEST_EXCEPTION_EMPTY_FUNC
+#define DOCTEST_REQUIRE_UNARY DOCTEST_EXCEPTION_EMPTY_FUNC
+#define DOCTEST_REQUIRE_UNARY_FALSE DOCTEST_EXCEPTION_EMPTY_FUNC
+
+#endif // DOCTEST_CONFIG_NO_EXCEPTIONS_BUT_WITH_ALL_ASSERTS
+
+#define DOCTEST_WARN_THROWS(...) DOCTEST_EXCEPTION_EMPTY_FUNC
+#define DOCTEST_CHECK_THROWS(...) DOCTEST_EXCEPTION_EMPTY_FUNC
+#define DOCTEST_REQUIRE_THROWS(...) DOCTEST_EXCEPTION_EMPTY_FUNC
+#define DOCTEST_WARN_THROWS_AS(expr, ...) DOCTEST_EXCEPTION_EMPTY_FUNC
+#define DOCTEST_CHECK_THROWS_AS(expr, ...) DOCTEST_EXCEPTION_EMPTY_FUNC
+#define DOCTEST_REQUIRE_THROWS_AS(expr, ...) DOCTEST_EXCEPTION_EMPTY_FUNC
+#define DOCTEST_WARN_THROWS_WITH(expr, ...) DOCTEST_EXCEPTION_EMPTY_FUNC
+#define DOCTEST_CHECK_THROWS_WITH(expr, ...) DOCTEST_EXCEPTION_EMPTY_FUNC
+#define DOCTEST_REQUIRE_THROWS_WITH(expr, ...) DOCTEST_EXCEPTION_EMPTY_FUNC
+#define DOCTEST_WARN_THROWS_WITH_AS(expr, with, ...) DOCTEST_EXCEPTION_EMPTY_FUNC
+#define DOCTEST_CHECK_THROWS_WITH_AS(expr, with, ...) DOCTEST_EXCEPTION_EMPTY_FUNC
+#define DOCTEST_REQUIRE_THROWS_WITH_AS(expr, with, ...) DOCTEST_EXCEPTION_EMPTY_FUNC
+#define DOCTEST_WARN_NOTHROW(...) DOCTEST_EXCEPTION_EMPTY_FUNC
+#define DOCTEST_CHECK_NOTHROW(...) DOCTEST_EXCEPTION_EMPTY_FUNC
+#define DOCTEST_REQUIRE_NOTHROW(...) DOCTEST_EXCEPTION_EMPTY_FUNC
+
+#define DOCTEST_WARN_THROWS_MESSAGE(expr, ...) DOCTEST_EXCEPTION_EMPTY_FUNC
+#define DOCTEST_CHECK_THROWS_MESSAGE(expr, ...) DOCTEST_EXCEPTION_EMPTY_FUNC
+#define DOCTEST_REQUIRE_THROWS_MESSAGE(expr, ...) DOCTEST_EXCEPTION_EMPTY_FUNC
+#define DOCTEST_WARN_THROWS_AS_MESSAGE(expr, ex, ...) DOCTEST_EXCEPTION_EMPTY_FUNC
+#define DOCTEST_CHECK_THROWS_AS_MESSAGE(expr, ex, ...) DOCTEST_EXCEPTION_EMPTY_FUNC
+#define DOCTEST_REQUIRE_THROWS_AS_MESSAGE(expr, ex, ...) DOCTEST_EXCEPTION_EMPTY_FUNC
+#define DOCTEST_WARN_THROWS_WITH_MESSAGE(expr, with, ...) DOCTEST_EXCEPTION_EMPTY_FUNC
+#define DOCTEST_CHECK_THROWS_WITH_MESSAGE(expr, with, ...) DOCTEST_EXCEPTION_EMPTY_FUNC
+#define DOCTEST_REQUIRE_THROWS_WITH_MESSAGE(expr, with, ...) DOCTEST_EXCEPTION_EMPTY_FUNC
+#define DOCTEST_WARN_THROWS_WITH_AS_MESSAGE(expr, with, ex, ...) DOCTEST_EXCEPTION_EMPTY_FUNC
+#define DOCTEST_CHECK_THROWS_WITH_AS_MESSAGE(expr, with, ex, ...) DOCTEST_EXCEPTION_EMPTY_FUNC
+#define DOCTEST_REQUIRE_THROWS_WITH_AS_MESSAGE(expr, with, ex, ...) DOCTEST_EXCEPTION_EMPTY_FUNC
+#define DOCTEST_WARN_NOTHROW_MESSAGE(expr, ...) DOCTEST_EXCEPTION_EMPTY_FUNC
+#define DOCTEST_CHECK_NOTHROW_MESSAGE(expr, ...) DOCTEST_EXCEPTION_EMPTY_FUNC
+#define DOCTEST_REQUIRE_NOTHROW_MESSAGE(expr, ...) DOCTEST_EXCEPTION_EMPTY_FUNC
+
+#endif // DOCTEST_CONFIG_NO_EXCEPTIONS
 
 // clang-format off
 // KEPT FOR BACKWARDS COMPATIBILITY - FORWARDING TO THE RIGHT MACROS
