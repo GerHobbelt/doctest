@@ -5,7 +5,6 @@
 DOCTEST_MAKE_STD_HEADERS_CLEAN_FROM_WARNINGS_ON_WALL_BEGIN
 #include <stdexcept>
 #include <cmath>
-#include <limits>
 DOCTEST_MAKE_STD_HEADERS_CLEAN_FROM_WARNINGS_ON_WALL_END
 
 TEST_CASE("normal macros") {
@@ -194,23 +193,30 @@ TEST_CASE("some asserts used in a function called by a test case") {
     someAssertsInFunction();
 }
 
-TEST_CASE("macro return values") {
-    int a = 4;
-    int b = 2;
-    DOCTEST_MSVC_SUPPRESS_WARNING_WITH_PUSH(4702) // unreachable code
-    if (CHECK(a == b)) { MESSAGE("should not be reached!"); }
-    if (CHECK_FALSE(a != b)) { MESSAGE("should not be reached!"); }
-    if (CHECK_EQ(a, b)) { MESSAGE("should not be reached!"); }
-    if (CHECK_UNARY(a == b)) { MESSAGE("should not be reached!"); }
-    if (CHECK_UNARY_FALSE(a != b)) { MESSAGE("should not be reached!"); }
-    if (CHECK_THROWS([]{}())) { MESSAGE("should not be reached!"); }
-    DOCTEST_MSVC_SUPPRESS_WARNING_POP
+inline DOCTEST_NOINLINE void comp(int a, int b) {
+    if (CHECK(a == b)) { MESSAGE(":D"); }
+    if (CHECK_FALSE(a != b)) { MESSAGE(":D"); }
+    if (CHECK_EQ(a, b)) { MESSAGE(":D"); }
+    if (CHECK_UNARY(a == b)) { MESSAGE(":D"); }
+    if (CHECK_UNARY_FALSE(a != b)) { MESSAGE(":D"); }
 }
 
-TEST_CASE("nan") {
-    REQUIRE_NOT_NAN(0.f);
-    CHECK_NAN(std::numeric_limits<long double>::infinity());
-    CHECK_NOT_NAN(0.);
-    WARN_NOT_NAN(std::numeric_limits<float>::quiet_NaN());
-    REQUIRE_NAN(std::numeric_limits<long double>::signaling_NaN());
+DOCTEST_MSVC_SUPPRESS_WARNING_WITH_PUSH(4702)
+TEST_CASE("check return values") {
+    comp(0, 0);
+
+    if (CHECK_THROWS(throw_if(true, true))) { MESSAGE(":D"); }
+    if (CHECK_THROWS_AS(throw_if(true, 2), int)) { MESSAGE(":D"); }
+    if (CHECK_NOTHROW(throw_if(false, 2))) { MESSAGE(":D"); }
+    if (CHECK_THROWS_WITH(throw_if(true, 2), "2")) { MESSAGE(":D"); }
 }
+
+TEST_CASE("check return values no print") {
+    comp(4, 2);
+
+    if (CHECK_THROWS(throw_if(false, false))) { MESSAGE(":D"); }
+    if (CHECK_THROWS_AS(throw_if(true, 2), doctest::Approx)) { MESSAGE(":D"); }
+    if (CHECK_NOTHROW(throw_if(true, 2))) { MESSAGE(":D"); }
+    if (CHECK_THROWS_WITH(throw_if(true, 2), "1")) { MESSAGE(":D"); }
+}
+DOCTEST_MSVC_SUPPRESS_WARNING_POP

@@ -113,6 +113,8 @@ This is a combination of ```<LEVEL>_THROWS_WITH``` and ```<LEVEL>_THROWS_AS```.
 CHECK_THROWS_WITH_AS(func(), "invalid operation!", std::runtime_error);
 ```
 
+All `THROWS_WITH` macros are unaffected by `DOCTEST_CONFIG_EVALUATE_ASSERTS_EVEN_WHEN_DISABLED`.
+
 - ```<LEVEL>_NOTHROW(expression)```
 
 Expects that no exception is thrown during evaluation of the expression.
@@ -133,16 +135,21 @@ Checkout the [**example**](../../examples/all_features/asserts_used_outside_of_t
 
 Currently [**logging macros**](logging.md) cannot be used for extra context for asserts outside of a test run. That means that the ```_MESSAGE``` variants of asserts are also not usable - since they are just a packed ```INFO()``` with an assert right after it.
 
-## NaN checking
+## Using asserts as conditions
 
-```<LEVEL>``` is one of 3 possible: ```REQUIRE```/```CHECK```/```WARN```.
+All assertion macros return a boolean value, reporting whether they succeeded. This can be used, for example, to have `nullptr` checks that don't terminate the test case on failure.
 
-- ```<LEVEL>_NAN(expression)```
-- ```<LEVEL>_NOT_NAN(expression)```
+Example:
+```c++
+if (CHECK(somePtr != nullptr))
+    CHECK(somePtr->someMethod() == 42);
+```
 
-These utility macros check if a floating point value is or is not NaN respectively.
+When `DOCTEST_CONFIG_DISABLE` is defined, all macros return `false` by default.
 
-They capture the actual float value on assertion failure.
+However, defining `DOCTEST_CONFIG_EVALUATE_ASSERTS_EVEN_WHEN_DISABLED` with `DOCTEST_CONFIG_DISABLE` causes the macros to evaluate their arguments and return the appropriate boolean value.
+
+Some macros are unaffected by `DOCTEST_CONFIG_EVALUATE_ASSERTS_EVEN_WHEN_DISABLED` because they rely on doctest functionality which is not available when `DOCTEST_CONFIG_DISABLE` is defined. This is stated in their documentation.
 
 ## Floating point comparisons
 
@@ -161,6 +168,18 @@ REQUIRE(22.0/7 == doctest::Approx(3.141).epsilon(0.01)); // allow for a 1% error
 ```
 
 When dealing with very large or very small numbers it can be useful to specify a scale, which can be achieved by calling the ```scale()``` method on the ```doctest::Approx``` instance.
+
+## NaN checking
+
+Two NaN floating point numbers do not compare equal to each other. This makes it quite inconvenient to check for NaN while capturing the value.
+```c++
+CHECK(std::isnan(performComputation()); // does not capture the result of the call
+```
+
+**doctest** provides `doctest::IsNaN` which can be used in assertions to check if a float (or any other floating point fundamental type) is indeed NaN, outputting the actual value if it is not.
+```c++
+CHECK(doctest::IsNaN(performComputation()); // captures the result!
+```
 
 --------
 

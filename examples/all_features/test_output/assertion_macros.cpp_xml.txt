@@ -532,7 +532,55 @@
       </Expression>
       <OverallResultsAsserts successes="9" failures="1" test_case_success="false"/>
     </TestCase>
-    <TestCase name="macro return values" filename="assertion_macros.cpp" line="0">
+    <TestCase name="check return values" filename="assertion_macros.cpp" line="0">
+      <Message type="WARNING" filename="assertion_macros.cpp" line="0">
+        <Text>
+          :D
+        </Text>
+      </Message>
+      <Message type="WARNING" filename="assertion_macros.cpp" line="0">
+        <Text>
+          :D
+        </Text>
+      </Message>
+      <Message type="WARNING" filename="assertion_macros.cpp" line="0">
+        <Text>
+          :D
+        </Text>
+      </Message>
+      <Message type="WARNING" filename="assertion_macros.cpp" line="0">
+        <Text>
+          :D
+        </Text>
+      </Message>
+      <Message type="WARNING" filename="assertion_macros.cpp" line="0">
+        <Text>
+          :D
+        </Text>
+      </Message>
+      <Message type="WARNING" filename="assertion_macros.cpp" line="0">
+        <Text>
+          :D
+        </Text>
+      </Message>
+      <Message type="WARNING" filename="assertion_macros.cpp" line="0">
+        <Text>
+          :D
+        </Text>
+      </Message>
+      <Message type="WARNING" filename="assertion_macros.cpp" line="0">
+        <Text>
+          :D
+        </Text>
+      </Message>
+      <Message type="WARNING" filename="assertion_macros.cpp" line="0">
+        <Text>
+          :D
+        </Text>
+      </Message>
+      <OverallResultsAsserts successes="9" failures="0" test_case_success="true"/>
+    </TestCase>
+    <TestCase name="check return values no print" filename="assertion_macros.cpp" line="0">
       <Expression success="false" type="CHECK" filename="assertion_macros.cpp" line="0">
         <Original>
           a == b
@@ -575,32 +623,43 @@
       </Expression>
       <Expression success="false" type="CHECK_THROWS" filename="assertion_macros.cpp" line="0">
         <Original>
-          []{}()
+          throw_if(false, false)
         </Original>
       </Expression>
-      <OverallResultsAsserts successes="0" failures="6" test_case_success="false"/>
-    </TestCase>
-    <TestCase name="nan" filename="assertion_macros.cpp" line="0">
-      <Expression success="false" type="CHECK_NAN" filename="assertion_macros.cpp" line="0">
+      <Expression success="false" type="CHECK_THROWS_AS" filename="assertion_macros.cpp" line="0">
         <Original>
-          std::numeric_limits&lt;long double>::infinity()
+          throw_if(true, 2)
         </Original>
-        <Expanded>
-          inf
-        </Expanded>
+        <Exception>
+          "2"
+        </Exception>
+        <ExpectedException>
+          doctest::Approx
+        </ExpectedException>
       </Expression>
-      <Expression success="false" type="WARN_NOT_NAN" filename="assertion_macros.cpp" line="0">
+      <Expression success="false" type="CHECK_NOTHROW" filename="assertion_macros.cpp" line="0">
         <Original>
-          std::numeric_limits&lt;float>::quiet_NaN()
+          throw_if(true, 2)
         </Original>
-        <Expanded>
-          nanf
-        </Expanded>
+        <Exception>
+          "2"
+        </Exception>
       </Expression>
-      <OverallResultsAsserts successes="3" failures="1" test_case_success="false"/>
+      <Expression success="false" type="CHECK_THROWS_WITH" filename="assertion_macros.cpp" line="0">
+        <Original>
+          throw_if(true, 2)
+        </Original>
+        <Exception>
+          "2"
+        </Exception>
+        <ExpectedExceptionString>
+          1
+        </ExpectedExceptionString>
+      </Expression>
+      <OverallResultsAsserts successes="0" failures="9" test_case_success="false"/>
     </TestCase>
   </TestSuite>
-  <OverallResultsAsserts successes="38" failures="46"/>
-  <OverallResultsTestCases successes="3" failures="20"/>
+  <OverallResultsAsserts successes="44" failures="48"/>
+  <OverallResultsTestCases successes="4" failures="19"/>
 </doctest>
 Program code.
