@@ -176,6 +176,7 @@ DOCTEST_MSVC_SUPPRESS_WARNING(5027) // move assignment operator was implicitly d
 DOCTEST_MSVC_SUPPRESS_WARNING(5026) // move constructor was implicitly defined as deleted
 DOCTEST_MSVC_SUPPRESS_WARNING(4623) // default constructor was implicitly defined as deleted
 DOCTEST_MSVC_SUPPRESS_WARNING(4640) // construction of local static object is not thread-safe
+DOCTEST_MSVC_SUPPRESS_WARNING(5045) // Spectre mitigation for memory load
 // static analysis
 DOCTEST_MSVC_SUPPRESS_WARNING(26439) // This kind of function may not throw. Declare it 'noexcept'
 DOCTEST_MSVC_SUPPRESS_WARNING(26495) // Always initialize a member variable
@@ -761,6 +762,7 @@ struct ContextOptions //!OCLINT too many fields
     bool case_sensitive;       // if filtering should be case sensitive
     bool exit;                 // if the program should be exited after the tests are ran/whatever
     bool duration;             // print the time duration of each test case
+    bool minimal;              // minimal console output (only test failures)
     bool quiet;                // no console output
     bool no_throw;             // to skip exceptions-related assertion macros
     bool no_exitcode;          // if the framework should return 0 as the exitcode
@@ -807,6 +809,9 @@ namespace detail {
 
     template<class T> struct is_lvalue_reference { const static bool value=false; };
     template<class T> struct is_lvalue_reference<T&> { const static bool value=true; };
+
+    template<class T> struct is_rvalue_reference { const static bool value=false; };
+    template<class T> struct is_rvalue_reference<T&&> { const static bool value=true; };
 
     template <class T>
     inline T&& forward(typename remove_reference<T>::type& t) DOCTEST_NOEXCEPT
@@ -860,8 +865,9 @@ namespace detail {
 
     DOCTEST_INTERFACE void my_memcpy(void* dest, const void* src, unsigned num);
 
-    DOCTEST_INTERFACE std::ostream* getTlsOss(); // returns a thread-local ostringstream
+    DOCTEST_INTERFACE std::ostream* getTlsOss(bool reset=true); // returns a thread-local ostringstream
     DOCTEST_INTERFACE String getTlsOssResult();
+
 
     template <bool C>
     struct StringMakerBase
@@ -872,12 +878,57 @@ namespace detail {
         }
     };
 
+    // Vector<int> and various type other than pointer or array.
+    template<typename T>
+    struct filldata
+    {
+        static void fill(const  T &in) {
+          *getTlsOss() << in;
+        }
+    };
+
+    /* This method can be chained */
+    template<typename T,unsigned long N>
+    void fillstream(const T (&in)[N] ) {
+        for(unsigned long i = 0; i < N; i++) {
+            *getTlsOss(false) << in[i];
+        }
+    }
+
+    template<typename T,unsigned long N>
+    struct filldata<T[N]>
+    {
+        static void fill(const T (&in)[N]) {
+                    fillstream(in);
+                    *getTlsOss(false)<<"";
+        }
+    };
+
+    template<typename T>
+    void filloss(const T& in){
+	filldata<T>::fill(in);
+    }
+
+    template<typename T,unsigned long N>
+    void filloss(const T (&in)[N]) {
+	// T[N], T(&)[N], T(&&)[N] have same behaviour.
+        // Hence remove reference.
+	filldata<typename remove_reference <decltype(in)>::type >::fill(in);
+    }
+
     template <>
     struct StringMakerBase<true>
     {
         template <typename T>
         static String convert(const DOCTEST_REF_WRAP(T) in) {
-            *getTlsOss() << in;
+            /* When parameter "in" is a null terminated const char* it works.
+	     * When parameter "in" is a T arr[N] without '\0' we can fill the
+             * stringstream with N objects (T=char).If in is char pointer *
+             * without '\0' , it would cause segfault
+	     * stepping over unaccessible memory.
+             */
+
+            filloss(in);
             return getTlsOssResult();
         }
     };
@@ -1101,14 +1152,24 @@ DOCTEST_CLANG_SUPPRESS_WARNING_WITH_PUSH("-Wunused-comparison")
 
 #define DOCTEST_DO_BINARY_EXPRESSION_COMPARISON(op, op_str, op_macro)                              \
     template <typename R>                                                                          \
-    DOCTEST_NOINLINE SFINAE_OP(Result,op) operator op(R&& rhs) {             \
-	    bool res = op_macro(doctest::detail::forward<L>(lhs), doctest::detail::forward<R>(rhs));                                                             \
+    DOCTEST_NOINLINE SFINAE_OP(Result,op) operator op(const R&& rhs) {             \
+    bool res = op_macro(doctest::detail::forward<const L>(lhs), doctest::detail::forward<const R>(rhs));                                                             \
+        if(m_at & assertType::is_false)                                                            \
+            res = !res;                                                                            \
+        if(!res || doctest::getContextOptions()->success)                                          \
+            return Result(res, stringifyBinaryExpr(lhs, op_str, rhs));                             \
+        return Result(res);                                                                        \
+    }												   \
+    template <typename R ,typename enable_if<  !doctest::detail::is_rvalue_reference<R>::value   , void >::type* = nullptr>                                         \
+    DOCTEST_NOINLINE SFINAE_OP(Result,op) operator op(const R& rhs) {             \
+    bool res = op_macro(doctest::detail::forward<const L>(lhs), doctest::detail::forward<const R>(rhs));                                                             \
         if(m_at & assertType::is_false)                                                            \
             res = !res;                                                                            \
         if(!res || doctest::getContextOptions()->success)                                          \
             return Result(res, stringifyBinaryExpr(lhs, op_str, rhs));                             \
         return Result(res);                                                                        \
     }
+
 
     // more checks could be added - like in Catch:
     // https://github.com/catchorg/Catch2/pull/1480/files
@@ -1308,8 +1369,13 @@ DOCTEST_CLANG_SUPPRESS_WARNING_POP
         // https://github.com/catchorg/Catch2/issues/870
         // https://github.com/catchorg/Catch2/issues/565
         template <typename L>
-	Expression_lhs<L> operator<<(L &&operand) {
-            return Expression_lhs<L>(doctest::detail::forward<L>(operand), m_at);
+	Expression_lhs<const L> operator<<(const L &&operand) {
+            return Expression_lhs<const L>(doctest::detail::forward<const L>(operand), m_at);
+        }
+
+        template <typename L,typename enable_if<!doctest::detail::is_rvalue_reference<L>::value,void >::type* = nullptr>
+	Expression_lhs<const L&> operator<<(const L &operand) {
+            return Expression_lhs<const L&>(operand, m_at);
         }
     };
 
@@ -1717,6 +1783,7 @@ public:
 
     void addFilter(const char* filter, const char* value);
     void clearFilters();
+    void setOption(const char* option, bool value);
     void setOption(const char* option, int value);
     void setOption(const char* option, const char* value);
 
@@ -3014,10 +3081,13 @@ namespace detail {
 
     DOCTEST_THREAD_LOCAL std::ostringstream g_oss; // NOLINT(cert-err58-cpp)
 
-    std::ostream* getTlsOss() {
-        g_oss.clear(); // there shouldn't be anything worth clearing in the flags
-        g_oss.str(""); // the slow way of resetting a string stream
-        //g_oss.seekp(0); // optimal reset - as seen here: https://stackoverflow.com/a/624291/3162383
+    //reset default value is true. getTlsOss(bool reset=true);
+    std::ostream* getTlsOss(bool reset) {
+        if(reset) {
+          g_oss.clear(); // there shouldn't be anything worth clearing in the flags
+          g_oss.str(""); // the slow way of resetting a string stream
+          //g_oss.seekp(0); // optimal reset - as seen here: https://stackoverflow.com/a/624291/3162383
+	}
         return &g_oss;
     }
 
@@ -3633,6 +3703,7 @@ Context::~Context() = default;
 void Context::applyCommandLine(int, const char* const*) {}
 void Context::addFilter(const char*, const char*) {}
 void Context::clearFilters() {}
+void Context::setOption(const char*, bool) {}
 void Context::setOption(const char*, int) {}
 void Context::setOption(const char*, const char*) {}
 bool Context::shouldExit() { return false; }
@@ -5817,9 +5888,15 @@ namespace {
             }
         }
 
-        void test_run_start() override { printIntro(); }
+        void test_run_start() override {
+            if(!opt.minimal)
+                printIntro();
+        }
 
         void test_run_end(const TestRunStats& p) override {
+            if(opt.minimal && p.numTestCasesFailed == 0)
+                return;
+
             separator_to_stream();
             s << std::dec;
 
@@ -6234,6 +6311,7 @@ void Context::parseArgs(int argc, const char* const* argv, bool withDefaults) {
     DOCTEST_PARSE_AS_BOOL_OR_FLAG("case-sensitive", "cs", case_sensitive, false);
     DOCTEST_PARSE_AS_BOOL_OR_FLAG("exit", "e", exit, false);
     DOCTEST_PARSE_AS_BOOL_OR_FLAG("duration", "d", duration, false);
+    DOCTEST_PARSE_AS_BOOL_OR_FLAG("minimal", "m", minimal, false);
     DOCTEST_PARSE_AS_BOOL_OR_FLAG("quiet", "q", quiet, false);
     DOCTEST_PARSE_AS_BOOL_OR_FLAG("no-throw", "nt", no_throw, false);
     DOCTEST_PARSE_AS_BOOL_OR_FLAG("no-exitcode", "ne", no_exitcode, false);
@@ -6301,7 +6379,12 @@ void Context::clearFilters() {
         curr.clear();
 }
 
-// allows the user to override procedurally the int/bool options from the command line
+// allows the user to override procedurally the bool options from the command line
+void Context::setOption(const char* option, bool value) {
+    setOption(option, value ? "true" : "false");
+}
+
+// allows the user to override procedurally the int options from the command line
 void Context::setOption(const char* option, int value) {
     setOption(option, toString(value).c_str());
     // NOLINTNEXTLINE(clang-analyzer-cplusplus.NewDeleteLeaks)
@@ -6363,7 +6446,7 @@ int Context::run() {
     if(p->cout == nullptr) {
         if(p->quiet) {
             p->cout = &discardOut;
-        } else if (p->out.size()) {
+        } else if(p->out.size()) {
             // to a file if specified
             fstr.open(p->out.c_str(), std::fstream::out);
             p->cout = &fstr;
