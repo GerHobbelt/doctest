@@ -375,7 +375,7 @@ typedef timer_large_integer::type ticks_t;
             return result;
         }
 
-        T operator=(T desired) DOCTEST_NOEXCEPT {
+        T operator=(T desired) DOCTEST_NOEXCEPT { // lgtm [cpp/assignment-does-not-return-this]
             store(desired);
             return desired;
         }
@@ -3029,22 +3029,6 @@ namespace {
             };
             printReporters(getListeners(), "listeners");
             printReporters(getReporters(), "reporters");
-        }
-
-        void list_query_results() {
-            separator_to_stream();
-            if(opt.count || opt.list_test_cases) {
-                s << Color::Cyan << "[doctest] " << Color::None
-                  << "unskipped test cases passing the current filters: "
-                  << g_cs->numTestCasesPassingFilters << "\n";
-            } else if(opt.list_test_suites) {
-                s << Color::Cyan << "[doctest] " << Color::None
-                  << "unskipped test cases passing the current filters: "
-                  << g_cs->numTestCasesPassingFilters << "\n";
-                s << Color::Cyan << "[doctest] " << Color::None
-                  << "test suites with unskipped test cases passing the current filters: "
-                  << g_cs->numTestSuitesPassingFilters << "\n";
-            }
         }
 
         // =========================================================================================

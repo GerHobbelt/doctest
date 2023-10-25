@@ -319,6 +319,10 @@ DOCTEST_MSVC_SUPPRESS_WARNING(26812) // Prefer 'enum class' over 'enum'
 #define DOCTEST_NOEXCEPT noexcept
 #endif // DOCTEST_NOEXCEPT
 
+#ifndef DOCTEST_CONSTEXPR
+#define DOCTEST_CONSTEXPR constexpr
+#endif // DOCTEST_CONSTEXPR
+
 // =================================================================================================
 // == FEATURE DETECTION END ========================================================================
 // =================================================================================================
@@ -813,7 +817,7 @@ namespace detail {
     template<class T> struct underlying_type : public std::underlying_type<T> {};
 #else
     // Use compiler intrinsics
-    template<class T> struct is_enum { constexpr static bool value = __is_enum(T); };
+    template<class T> struct is_enum { DOCTEST_CONSTEXPR static bool value = __is_enum(T); };
     template<class T> struct underlying_type { typedef __underlying_type(T) type; };
 #endif
     // clang-format on
@@ -830,12 +834,12 @@ namespace detail {
 
         template<class, class = void>
         struct check {
-            static constexpr bool value = false;
+            static DOCTEST_CONSTEXPR bool value = false;
         };
 
         template<class T>
         struct check<T, decltype(os() << val<T>(), void())> {
-            static constexpr bool value = true;
+            static DOCTEST_CONSTEXPR bool value = true;
         };
     } // namespace has_insertion_operator_impl
 
@@ -3098,7 +3102,7 @@ typedef timer_large_integer::type ticks_t;
             return result;
         }
 
-        T operator=(T desired) DOCTEST_NOEXCEPT {
+        T operator=(T desired) DOCTEST_NOEXCEPT { // lgtm [cpp/assignment-does-not-return-this]
             store(desired);
             return desired;
         }
@@ -5752,22 +5756,6 @@ namespace {
             };
             printReporters(getListeners(), "listeners");
             printReporters(getReporters(), "reporters");
-        }
-
-        void list_query_results() {
-            separator_to_stream();
-            if(opt.count || opt.list_test_cases) {
-                s << Color::Cyan << "[doctest] " << Color::None
-                  << "unskipped test cases passing the current filters: "
-                  << g_cs->numTestCasesPassingFilters << "\n";
-            } else if(opt.list_test_suites) {
-                s << Color::Cyan << "[doctest] " << Color::None
-                  << "unskipped test cases passing the current filters: "
-                  << g_cs->numTestCasesPassingFilters << "\n";
-                s << Color::Cyan << "[doctest] " << Color::None
-                  << "test suites with unskipped test cases passing the current filters: "
-                  << g_cs->numTestSuitesPassingFilters << "\n";
-            }
         }
 
         // =========================================================================================
