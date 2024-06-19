@@ -1,7 +1,7 @@
 #ifndef DOCTEST_MPI_SUB_COMM_H
 #define DOCTEST_MPI_SUB_COMM_H
 
-#include "mpi.h"
+#include "doctest_mpi.h"
 #include "doctest/doctest.h"
 #include <cassert>
 #include <string>
