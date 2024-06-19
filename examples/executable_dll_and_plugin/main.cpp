@@ -28,7 +28,7 @@ DOCTEST_CLANG_SUPPRESS_WARNING("-Wnonportable-system-include-path")
 #include <windows.h>
 DOCTEST_MAKE_STD_HEADERS_CLEAN_FROM_WARNINGS_ON_WALL_END
 #ifdef _MSC_VER
-#define LoadDynamicLib(lib) LoadLibrary(lib ".dll")
+#define LoadDynamicLib(lib) LoadLibraryA(lib ".dll")
 #else // _MSC_VER
 #define LoadDynamicLib(lib) LoadLibrary("lib" lib ".dll")
 #endif // _MSC_VER
