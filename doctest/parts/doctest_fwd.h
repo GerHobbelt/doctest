@@ -45,7 +45,7 @@
 
 #define DOCTEST_VERSION_MAJOR 2
 #define DOCTEST_VERSION_MINOR 4
-#define DOCTEST_VERSION_PATCH 9
+#define DOCTEST_VERSION_PATCH 10
 
 // util we need here
 #define DOCTEST_TOSTR_IMPL(x) #x
@@ -181,7 +181,7 @@
     DOCTEST_MSVC_SUPPRESS_WARNING(4571) /* SEH related */                                          \
     DOCTEST_MSVC_SUPPRESS_WARNING(4710) /* function not inlined */                                 \
     DOCTEST_MSVC_SUPPRESS_WARNING(4711) /* function selected for inline expansion*/                \
-    /* */                                                                                          \
+    /* common ones */                                                                              \
     DOCTEST_MSVC_SUPPRESS_WARNING(4616) /* invalid compiler warning */                             \
     DOCTEST_MSVC_SUPPRESS_WARNING(4619) /* invalid compiler warning */                             \
     DOCTEST_MSVC_SUPPRESS_WARNING(4996) /* The compiler encountered a deprecated declaration */    \
