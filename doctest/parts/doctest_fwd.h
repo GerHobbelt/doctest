@@ -1,7 +1,7 @@
 //
 // doctest.h - the lightest feature-rich C++ single-header testing framework for unit tests and TDD
 //
-// Copyright (c) 2016-2021 Viktor Kirilov
+// Copyright (c) 2016-2023 Viktor Kirilov
 //
 // Distributed under the MIT Software License
 // See accompanying file LICENSE.txt or copy at
@@ -1310,9 +1310,9 @@ namespace detail {
     template<class T, unsigned N>   struct decay_array<T[N]> { using type = T*; };
     template<class T>               struct decay_array<T[]>  { using type = T*; };
 
-    template<class T>   struct not_char_pointer              { static DOCTEST_CONSTEXPR value = 1; };
-    template<>          struct not_char_pointer<char*>       { static DOCTEST_CONSTEXPR value = 0; };
-    template<>          struct not_char_pointer<const char*> { static DOCTEST_CONSTEXPR value = 0; };
+    template<class T>   struct not_char_pointer              { static DOCTEST_CONSTEXPR int value = 1; };
+    template<>          struct not_char_pointer<char*>       { static DOCTEST_CONSTEXPR int value = 0; };
+    template<>          struct not_char_pointer<const char*> { static DOCTEST_CONSTEXPR int value = 0; };
 
     template<class T> struct can_use_op : public not_char_pointer<typename decay_array<T>::type> {};
 #endif // DOCTEST_CONFIG_TREAT_CHAR_STAR_AS_STRING
