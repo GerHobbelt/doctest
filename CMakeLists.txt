@@ -1,4 +1,7 @@
-cmake_minimum_required(VERSION 3.0)
+cmake_minimum_required(VERSION 3.0...3.29.5)
+
+# See https://discourse.cmake.org/t/how-to-fix-cmake-minimum-required-deprecation-warning/2487/2
+# for more on setting the miimum required version.
 
 if(POLICY CMP0077)
     cmake_policy(SET CMP0077 NEW)
