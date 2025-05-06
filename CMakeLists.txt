@@ -1,7 +1,7 @@
-cmake_minimum_required(VERSION 3.0...3.29.5)
+cmake_minimum_required(VERSION 3.5...3.31.7)
 
 # See https://discourse.cmake.org/t/how-to-fix-cmake-minimum-required-deprecation-warning/2487/2
-# for more on setting the miimum required version.
+# for more on setting the minimum required version.
 
 if(POLICY CMP0077)
     cmake_policy(SET CMP0077 NEW)
@@ -97,6 +97,8 @@ if(MAIN_PROJECT AND DOCTEST_WITH_TESTS)
     add_subdirectory(scripts/playground)
     add_subdirectory(examples/mpi)
 endif()
+
+set(DOCTEST_CMAKE_HELPER "${CMAKE_CURRENT_SOURCE_DIR}/scripts/cmake/doctest.cmake" CACHE PATH "Absolute path to to doctest helper file. `include(${DOCTEST_CMAKE_HELPER})`")
 
 ################################################################################
 ## PACKAGE SUPPORT
