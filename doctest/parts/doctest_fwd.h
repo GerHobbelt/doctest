@@ -45,7 +45,7 @@
 
 #define DOCTEST_VERSION_MAJOR 2
 #define DOCTEST_VERSION_MINOR 4
-#define DOCTEST_VERSION_PATCH 11
+#define DOCTEST_VERSION_PATCH 12
 
 // util we need here
 #define DOCTEST_TOSTR_IMPL(x) #x
@@ -487,13 +487,17 @@ DOCTEST_GCC_SUPPRESS_WARNING_POP
 #endif
 #endif // DOCTEST_CONFIG_USE_IOSFWD
 
-// for clang - always include ciso646 (which drags some std stuff) because
-// we want to check if we are using libc++ with the _LIBCPP_VERSION macro in
+// for clang - always include <version> or <ciso646> (which drags some std stuff)
+// because we want to check if we are using libc++ with the _LIBCPP_VERSION macro in
 // which case we don't want to forward declare stuff from std - for reference:
 // https://github.com/doctest/doctest/issues/126
 // https://github.com/doctest/doctest/issues/356
 #if DOCTEST_CLANG
+#if DOCTEST_CPLUSPLUS >= 201703L && __has_include(<version>)
+#include <version>
+#else
 #include <ciso646>
+#endif
 #endif // clang
 
 #ifdef _LIBCPP_VERSION
@@ -922,6 +926,7 @@ struct ContextOptions //!OCLINT too many fields
     bool no_skip;              // don't skip test cases which are marked to be skipped
     bool gnu_file_line;        // if line numbers should be surrounded with :x: and not (x):
     bool no_path_in_filenames; // if the path to files should be removed from the output
+    String strip_file_prefixes;// remove the longest matching one of these prefixes from any file paths in the output
     bool no_line_numbers;      // if source code line numbers should be omitted from the output
     bool no_debug_output;      // no output in the debug console when a debugger is attached
     bool no_skipped_summary;   // don't print "skipped" in the summary !!! UNDOCUMENTED !!!
@@ -1104,6 +1109,8 @@ String toString(const DOCTEST_REF_WRAP(T) value) {
     return StringMaker<T>::convert(value);
 }
 
+inline String&& toString(String&& in) { return static_cast<String&&>(in); }
+
 #ifdef DOCTEST_CONFIG_TREAT_CHAR_STAR_AS_STRING
 DOCTEST_INTERFACE String toString(const char* in);
 #endif // DOCTEST_CONFIG_TREAT_CHAR_STAR_AS_STRING
@@ -1113,7 +1120,7 @@ DOCTEST_INTERFACE String toString(const char* in);
 DOCTEST_INTERFACE String toString(const std::string& in);
 #endif // VS 2019
 
-DOCTEST_INTERFACE String toString(String in);
+DOCTEST_INTERFACE String toString(const String& in);
 
 DOCTEST_INTERFACE String toString(std::nullptr_t);
 
